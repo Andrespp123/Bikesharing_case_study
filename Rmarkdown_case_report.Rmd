@@ -1,0 +1,149 @@
+---
+title: "Google data analytics capstone project report"
+author: "Andrés Peña"
+date: "2/17/2022"
+output: html_document
+---
+```{r, include=FALSE}
+
+library(tidyverse)
+library(lubridate)
+library(RColorBrewer)
+library(ggmap)
+```
+
+```{r, include=FALSE}
+csv_files = list.files(path = "C:/Users/andre/Desktop/CASE STUDY/DATASETS/DIRTY DATA/UNZIPPED", pattern = "csv$",
+                       full.names = TRUE)
+
+consolidated_2021 <- map_dfr(csv_files, read_csv)
+
+```
+
+**USING TIDYVERSE PACKAGE**         
+First of all to begin the analysis we need to *understand* the structure of the data frame
+```{r}
+str(consolidated_2021)
+
+```
+The str() function helps the process of analyzing the data frame highlighting the names of the columns and the type of data they contain.
+
+```{r}
+summary(consolidated_2021)
+
+```
+
+The summary() function is very similar in that it returns the names of the columns and the type of data they contain but with extra relevant information such as the median for numeric columns, also the min. and max. values for the data types that apply.
+
+```{r}
+length(unique(consolidated_2021$ride_id)) == nrow(consolidated_2021)
+
+```
+This chunk of code is used to see if there are any duplicates in the ride_id column, which just so happens to be the primary key for the entire data frame, meaning the values should be unique for each row and there should not be any duplicates if the data frame used is completely clean.
+
+```{r}
+consolidated_2021 <- cbind(consolidated_2021, time_riding = as.numeric(consolidated_2021$ended_at - consolidated_2021$started_at)/60)
+
+```
+This code chunk is used specifically to create a new column that shows the time spent on each individual ride, it is going to help reveal some key information later on in the analysis.
+```{r}
+sum(is.na(consolidated_2021$ride_id))
+sum(is.na(consolidated_2021$rideable_type))
+sum(is.na(consolidated_2021$member_casual))
+sum(is.na(consolidated_2021$time_riding))
+```
+Here, this code chunk is used to check to check for NA values in the more sensitive data columns. We see that the output for each line of code is 0, so it is correct to say that there are no NA values in the aforementioned columns.
+```{r}
+casual_members=filter(consolidated_2021,member_casual=='casual'& time_riding < 600 & time_riding > 0)
+annual_members=filter(consolidated_2021,member_casual=='member'& time_riding < 600 & time_riding > 0)
+
+```
+This code chunk is used to filter out the data frame according to the type of member. This is basic to conduct the casual vs. annual member comparison.
+```{r}
+perc_1 <- count(annual_members)/count(consolidated_2021)*100
+print(perc_1)
+
+perc_2 <- 100-perc_1
+print(perc_2)
+
+ggplot(data=consolidated_2021) +
+  geom_bar(mapp=aes(x=member_casual , fill=member_casual)) +
+  labs(title="Casual member rides Vs. Annual member rides") +
+  annotate("text", x=1, y=1500000, label="45.2%", size=10, fontface= "bold") +
+  annotate("text", x=2, y=1500000, label="54.8%", size=10, fontface= "bold") +
+  ylab("Number of rides") +
+  xlab("Member type")
+
+```
+       
+Out of the graph we can easily tell that annual members made more rides in the year of 2021. Based on this percentage, the marketing department can set future goals for their marketing plan. Given that their objective is to convert casual riders to annual members, it would be reasonable to aim for a 60% 40% or 65% 35% goal for the next year. 
+
+```{r}
+mean(casual_members$time_riding)
+
+ggplot(data=casual_members)+
+  geom_histogram(bins=30,color= "black", fill="green")+
+  aes(x=time_riding)+
+  xlim(0,60)+
+  theme_bw(base_size = 18)+
+  xlab("Time of the ride (in minutes)")+
+  ylab("Number of rides")+
+  ggtitle("Histogram for casual members")+
+  geom_vline(aes(xintercept = mean(time_riding)), color= "red") +
+  annotate("text",x=40, y=150000, label= "The mean is 25.64 min. \n per ride", size =10)
+```
+       
+As seen in the graph, the highest concentration of time for the rides happens between 0 and 20 minutes, and the distribution starts diminishing as time increases. It is also very important to highlight the mean of the group being 25.64 minutes per ride because that is going to function as the comparing factor between casual and annual rides. For the annual member rides we see the following:
+```{r}
+mean(annual_members$time_riding)
+
+ggplot(data=annual_members)+
+  geom_histogram(bins=30,color= "black", fill="blue")+
+  aes(x=time_riding)+
+  xlim(0,60)+
+  theme_bw(base_size = 18)+
+  xlab("Time of the ride (in minutes)")+
+  ylab("Number of rides")+
+  ggtitle("Histogram for annual members")+
+  geom_vline(aes(xintercept = mean(time_riding)), color= "red")+
+  annotate("text",x=40, y=200000, label= "The mean is 13.19 min. \n per ride", size =10)
+```
+     
+In the annual histogram there is a higher concentration in the lower time limits, and we can also see a steeper decline towards the higher time marks. The mean for the time spent in each ride is 13.19 minutes which is almost half of the mean for casual member ride time. Based on that, we can assume that casual riders tend to stay on longer rides, because tourists fall in that group. Making longer and longer trips to get to know the rest of the city.      
+
+	After those comparisons are made, we proceed to compare the bike type usage, just to check if there are any wild discrepancies to guide us better through the analyze phase.  This is the outcome: 
+
+```{r}
+ggplot(data=consolidated_2021)+
+  geom_bar(aes(x=member_casual, fill=rideable_type))+
+  theme_bw(base_size = 18)+
+  ggtitle("Different type of bike usage according to member type")+
+  xlab("Member type")+
+  ylab("Count")
+
+```
+       
+Nothing much to conclude by looking at the graph. The difference in bike usage is proportional to the difference of total rides. One very important thing is that annual members choose not to use the docked bike type, maybe that is a benefit of the annual membership.   
+
+And lastly I decided to develop a Chicago heatmap, where we could analyze what parts of the city are the most frequent for casual riders. I decided to leave out the annual members because the goal of the marketing team is going to be to target the casual members and convert them into annual members, so aiming the publicity for: 
+
+```{r}
+myvars <- c("start_lat","start_lng")
+start_casual <- casual_members[myvars]
+start_casual <- drop_na(start_casual)
+
+mean.longitude <- mean(start_casual$start_lng)
+mean.latitude <- mean(start_casual$start_lat)
+
+chicago_map<- get_map(location = c(mean.longitude, mean.latitude), zoom = 13, scale = 2)
+chicago_map <- ggmap(chicago_map, extent="device", legend="none")
+chicago_map <- chicago_map + stat_density2d(data=start_casual,
+                                        aes(x=start_lng, y=start_lat, fill=..level.., alpha=10), geom="polygon")
+
+chicago_map <- chicago_map + scale_fill_gradientn(colours=rev(brewer.pal(7, "Spectral")))
+
+plot(chicago_map)
+```
+       
+	In the image above, the red color indicates a high level of density for the area. In other words the point that is marked in red indicates the most concurred spot that casual riders use to start a ride. So in this example our focus as an organization should be to advertise to casual riders specifically on the navy pier station.
+
